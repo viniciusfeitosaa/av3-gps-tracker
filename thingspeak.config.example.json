@@ -1,0 +1,9 @@
+{
+  "channelId": "SEU_CHANNEL_ID",
+  "writeApiKey": "COLE_WRITE_API_KEY",
+  "readApiKey": "COLE_READ_API_KEY",
+  "fieldLat": 1,
+  "fieldLon": 2,
+  "intervalMs": 15000,
+  "updateUrl": "https://api.thingspeak.com/update.json"
+}

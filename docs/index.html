@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>AV3 — Tracker ThingSpeak (público)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #14201c;
+      --muted: #5a6b64;
+      --panel: rgba(248, 250, 247, 0.92);
+      --line: rgba(20, 32, 28, 0.12);
+      --accent: #0f766e;
+      --accent-soft: #ccfbf1;
+      --warn: #b45309;
+      --ok: #047857;
+      --shadow: 0 18px 50px rgba(20, 32, 28, 0.18);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      color: var(--ink);
+      font-family: "DM Sans", sans-serif;
+      background: #d7e0da;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .panel {
+      position: absolute;
+      z-index: 1000;
+      top: 16px;
+      right: 16px;
+      left: auto;
+      bottom: 16px;
+      width: min(360px, calc(100vw - 32px));
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: 22px 22px 18px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      overflow: auto;
+    }
+
+    .brand {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(2rem, 5vw, 2.6rem);
+      line-height: 0.95;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .brand span {
+      display: block;
+      font-family: "DM Sans", sans-serif;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .lede {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--warn);
+      box-shadow: 0 0 0 4px rgba(180, 83, 9, 0.15);
+      flex-shrink: 0;
+    }
+    .dot.live {
+      background: var(--ok);
+      box-shadow: 0 0 0 4px rgba(4, 120, 87, 0.18);
+      animation: pulse 1.8s ease-out infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(4, 120, 87, 0.35); }
+      100% { box-shadow: 0 0 0 12px rgba(4, 120, 87, 0); }
+    }
+
+    .coords {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .coords dl {
+      margin: 0;
+      padding: 12px 12px 10px;
+      border-top: 2px solid var(--accent);
+      background: linear-gradient(180deg, var(--accent-soft), transparent 120%);
+    }
+    .coords dt {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .coords dd {
+      margin: 6px 0 0;
+      font-variant-numeric: tabular-nums;
+      font-size: 1.15rem;
+      font-weight: 700;
+      word-break: break-all;
+    }
+
+    .meta {
+      display: grid;
+      gap: 6px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .meta strong { color: var(--ink); font-weight: 600; }
+
+    .spark-wrap h2,
+    .feed-wrap h2 {
+      margin: 0 0 8px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    #spark {
+      width: 100%;
+      height: 84px;
+      display: block;
+      background:
+        linear-gradient(180deg, rgba(15, 118, 110, 0.08), transparent 70%);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .feed-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 180px;
+      overflow: auto;
+    }
+    .feed-list li {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.8rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .feed-list .when { color: var(--muted); grid-column: 1 / -1; font-size: 0.72rem; }
+    .feed-list .ll { font-weight: 600; }
+    .feed-list .id { color: var(--muted); }
+
+    .footer-note {
+      margin-top: auto;
+      padding-top: 8px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .footer-note a {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .footer-note a:hover { text-decoration: underline; }
+
+    @media (max-width: 720px) {
+      .panel {
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: 48vh;
+        border-radius: 16px 16px 0 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map" aria-label="Mapa da trilha GPS"></div>
+
+  <aside class="panel" aria-label="Painel ThingSpeak">
+    <div>
+      <h1 class="brand"><span>AV3 GPS · Tarefa 2</span>Tracker remoto</h1>
+    </div>
+    <p class="lede">Frontend público: lê só o ThingSpeak (sem BBB no navegador). Mapa + satélite, a cada 15 s.</p>
+
+    <div class="status" id="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Conectando…</span>
+    </div>
+
+    <div class="coords">
+      <dl>
+        <dt>Latitude</dt>
+        <dd id="latVal">—</dd>
+      </dl>
+      <dl>
+        <dt>Longitude</dt>
+        <dd id="lonVal">—</dd>
+      </dl>
+    </div>
+
+    <div class="meta">
+      <div>Último envio: <strong id="whenVal">—</strong></div>
+      <div>Id entrada: <strong id="entryVal">—</strong></div>
+      <div>Pontos na trilha: <strong id="trailVal">0</strong></div>
+      <div>Canal: <strong id="channelVal">—</strong></div>
+    </div>
+
+    <div class="spark-wrap">
+      <h2>Trajeto recente</h2>
+      <svg id="spark" viewBox="0 0 320 84" preserveAspectRatio="none" aria-hidden="true"></svg>
+    </div>
+
+    <div class="feed-wrap">
+      <h2>Últimas entradas</h2>
+      <ul class="feed-list" id="feedList"></ul>
+    </div>
+
+    <p class="footer-note">
+      Página no GitHub Pages — BBB só envia ao canal.
+      <a id="tsLink" href="#" target="_blank" rel="noopener">abrir canal</a>.
+    </p>
+  </aside>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    /* Só Read API Key aqui. Nunca coloque a Write API Key nesta página pública. */
+    var cfg = {
+      channelId: '3588871',
+      readApiKey: '1GC31ZRUV62C2N2N',
+      fieldLat: 1,
+      fieldLon: 2
+    };
+
+    var FEED_RESULTS = 40;
+    var map, marker, trailLine;
+    var knownIds = {};
+
+    var el = {
+      statusDot: document.getElementById('statusDot'),
+      statusText: document.getElementById('statusText'),
+      latVal: document.getElementById('latVal'),
+      lonVal: document.getElementById('lonVal'),
+      whenVal: document.getElementById('whenVal'),
+      entryVal: document.getElementById('entryVal'),
+      trailVal: document.getElementById('trailVal'),
+      channelVal: document.getElementById('channelVal'),
+      feedList: document.getElementById('feedList'),
+      spark: document.getElementById('spark'),
+      tsLink: document.getElementById('tsLink')
+    };
+
+    var DefaultIcon = L.icon({
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+    L.Marker.prototype.options.icon = DefaultIcon;
+
+    map = L.map('map', { zoomControl: true }).setView([-3.742, -38.572], 15);
+
+    var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    });
+    /* OSM nao tem satelite; Esri World Imagery e o basemap usual no Leaflet */
+    var sat = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri'
+      }
+    );
+    sat.addTo(map);
+    L.control.layers(
+      { 'Satelite': sat, 'Mapa OSM': osm },
+      null,
+      { position: 'topleft' }
+    ).addTo(map);
+
+    trailLine = L.polyline([], { color: '#fbbf24', weight: 4, opacity: 0.95 }).addTo(map);
+
+    function setStatus(ok, text) {
+      el.statusDot.className = 'dot' + (ok ? ' live' : '');
+      el.statusText.textContent = text;
+    }
+
+    function fmtWhen(iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString('pt-BR');
+    }
+
+    function ageLabel(iso) {
+      if (!iso) return '';
+      var ms = Date.now() - new Date(iso).getTime();
+      if (isNaN(ms)) return '';
+      var s = Math.round(ms / 1000);
+      if (s < 60) return s + ' s atrás';
+      if (s < 3600) return Math.round(s / 60) + ' min atrás';
+      return Math.round(s / 3600) + ' h atrás';
+    }
+
+    function fieldNames() {
+      return {
+        fLat: 'field' + (cfg.fieldLat || 1),
+        fLon: 'field' + (cfg.fieldLon || 2)
+      };
+    }
+
+    function feedsUrl() {
+      var url = 'https://api.thingspeak.com/channels/' + cfg.channelId +
+        '/feeds.json?results=' + FEED_RESULTS;
+      if (cfg.readApiKey) url += '&api_key=' + encodeURIComponent(cfg.readApiKey);
+      return url;
+    }
+
+    function parseFeeds(payload) {
+      var names = fieldNames();
+      var feeds = (payload && payload.feeds) || [];
+      var points = [];
+      for (var i = 0; i < feeds.length; i++) {
+        var row = feeds[i];
+        var lat = parseFloat(row[names.fLat]);
+        var lon = parseFloat(row[names.fLon]);
+        if (isNaN(lat) || isNaN(lon)) continue;
+        points.push({
+          id: row.entry_id,
+          lat: lat,
+          lon: lon,
+          when: row.created_at
+        });
+      }
+      return points;
+    }
+
+    function drawSpark(points) {
+      var svg = el.spark;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      if (points.length < 2) return;
+
+      var lats = points.map(function (p) { return p.lat; });
+      var lons = points.map(function (p) { return p.lon; });
+      var minLat = Math.min.apply(null, lats);
+      var maxLat = Math.max.apply(null, lats);
+      var minLon = Math.min.apply(null, lons);
+      var maxLon = Math.max.apply(null, lons);
+      var dLat = (maxLat - minLat) || 1e-6;
+      var dLon = (maxLon - minLon) || 1e-6;
+      var w = 320;
+      var h = 84;
+      var pad = 8;
+
+      var d = '';
+      for (var i = 0; i < points.length; i++) {
+        var x = pad + (i / (points.length - 1)) * (w - pad * 2);
+        var nx = (points[i].lon - minLon) / dLon;
+        var ny = (points[i].lat - minLat) / dLat;
+        var y = pad + (1 - ny) * (h - pad * 2) * 0.55 + (1 - nx) * (h - pad * 2) * 0.35;
+        d += (i ? ' L ' : 'M ') + x.toFixed(1) + ' ' + y.toFixed(1);
+      }
+
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#0f766e');
+      path.setAttribute('stroke-width', '2.5');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(path);
+
+      var last = points[points.length - 1];
+      var lx = pad + ((points.length - 1) / (points.length - 1)) * (w - pad * 2);
+      var lnx = (last.lon - minLon) / dLon;
+      var lny = (last.lat - minLat) / dLat;
+      var ly = pad + (1 - lny) * (h - pad * 2) * 0.55 + (1 - lnx) * (h - pad * 2) * 0.35;
+      var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', lx.toFixed(1));
+      dot.setAttribute('cy', ly.toFixed(1));
+      dot.setAttribute('r', '4');
+      dot.setAttribute('fill', '#0f766e');
+      svg.appendChild(dot);
+    }
+
+    function renderList(points) {
+      el.feedList.innerHTML = '';
+      var newestFirst = points.slice().reverse().slice(0, 8);
+      if (!newestFirst.length) {
+        el.feedList.innerHTML = '<li><span class="when">Sem entradas ainda</span></li>';
+        return;
+      }
+      for (var i = 0; i < newestFirst.length; i++) {
+        var p = newestFirst[i];
+        var li = document.createElement('li');
+        li.innerHTML =
+          '<span class="when">' + fmtWhen(p.when) + ' · ' + ageLabel(p.when) + '</span>' +
+          '<span class="ll">' + p.lat.toFixed(5) + ', ' + p.lon.toFixed(5) + '</span>' +
+          '<span class="id">#' + p.id + '</span>';
+        el.feedList.appendChild(li);
+      }
+    }
+
+    function applyPoints(points) {
+      if (!points.length) {
+        setStatus(false, 'Canal sem lat/lon ainda');
+        return;
+      }
+
+      var latlngs = points.map(function (p) { return [p.lat, p.lon]; });
+      trailLine.setLatLngs(latlngs);
+      el.trailVal.textContent = String(points.length);
+
+      var last = points[points.length - 1];
+      var latlng = [last.lat, last.lon];
+      if (!marker) {
+        marker = L.marker(latlng).addTo(map).bindPopup('BBB remota');
+      } else {
+        marker.setLatLng(latlng);
+      }
+
+      if (!knownIds[last.id]) {
+        map.setView(latlng, Math.max(map.getZoom(), 15));
+        knownIds[last.id] = true;
+      }
+
+      el.latVal.textContent = last.lat.toFixed(6);
+      el.lonVal.textContent = last.lon.toFixed(6);
+      el.whenVal.textContent = fmtWhen(last.when) + ' (' + ageLabel(last.when) + ')';
+      el.entryVal.textContent = '#' + last.id;
+      setStatus(true, 'Ao vivo · ThingSpeak');
+
+      drawSpark(points);
+      renderList(points);
+
+      if (points.length > 1) {
+        map.fitBounds(trailLine.getBounds().pad(0.2));
+        marker.setLatLng(latlng);
+      }
+    }
+
+    function pollThingSpeak() {
+      if (!cfg || !cfg.channelId || String(cfg.channelId).indexOf('COLE_') === 0) {
+        setStatus(false, 'Configure channelId');
+        return;
+      }
+      fetch(feedsUrl())
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          applyPoints(parseFeeds(data));
+        })
+        .catch(function (e) {
+          setStatus(false, 'Erro ThingSpeak: ' + e.message);
+        });
+    }
+
+    el.channelVal.textContent = cfg.channelId;
+    el.tsLink.href = 'https://thingspeak.com/channels/' + cfg.channelId;
+    setStatus(false, 'Consultando canal ' + cfg.channelId + '…');
+    pollThingSpeak();
+    setInterval(pollThingSpeak, 15000);
+  </script>
+</body>
+</html>

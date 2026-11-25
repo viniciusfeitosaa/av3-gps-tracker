@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AV3 GPS Tracker — OpenStreetMap</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Leaflet local (sem CDN) -->
+  <link rel="stylesheet" href="/lib/leaflet/leaflet.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+    #infobox {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 8px 12px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      max-width: 320px;
+      border: 1px solid #888;
+      border-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="infobox">Aguardando GPS...</div>
+
+  <script src="/lib/leaflet/leaflet.js"></script>
+  <script>
+    var map, marker, trailLine, trail = [];
+    var socket;
+    var infoboxEl = document.getElementById('infobox');
+
+    /* Icones locais (evita path quebrado do marker) */
+    var DefaultIcon = L.icon({
+      iconUrl: '/lib/leaflet/images/marker-icon.png',
+      iconRetinaUrl: '/lib/leaflet/images/marker-icon-2x.png',
+      shadowUrl: '/lib/leaflet/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+    L.Marker.prototype.options.icon = DefaultIcon;
+
+    var start = [-3.742, -38.572];
+    map = L.map('map', {
+      zoomControl: true,
+      preferCanvas: false
+    }).setView(start, 15);
+
+    /* OpenStreetMap — tiles no navegador do PC */
+    var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      crossOrigin: true
+    });
+
+    /* Fallback Carto se OSM falhar / lento */
+    var carto = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OSM &copy; CARTO',
+      subdomains: 'abcd'
+    });
+
+    osm.addTo(map);
+    osm.on('tileerror', function () {
+      if (!map.hasLayer(carto)) {
+        map.removeLayer(osm);
+        carto.addTo(map);
+        infoboxEl.textContent = 'Tiles OSM falharam — usando Carto/OSM.';
+      }
+    });
+
+    L.control.layers({
+      'OpenStreetMap': osm,
+      'Carto Voyager': carto
+    }).addTo(map);
+
+    trailLine = L.polyline([], { color: '#1368ce', weight: 4 }).addTo(map);
+
+    function fixMapSize() {
+      setTimeout(function () { map.invalidateSize(true); }, 100);
+      setTimeout(function () { map.invalidateSize(true); }, 500);
+    }
+    window.addEventListener('load', fixMapSize);
+    window.addEventListener('resize', function () { map.invalidateSize(true); });
+    fixMapSize();
+
+    function connectWebSocket() {
+      var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+      socket = new WebSocket(proto + location.host);
+
+      socket.onopen = function () {
+        infoboxEl.textContent = 'WebSocket OK — aguardando fix GPS...';
+        fixMapSize();
+      };
+
+      socket.onmessage = function (ev) {
+        var data;
+        try { data = JSON.parse(ev.data); } catch (e) { return; }
+        if (typeof data.lat !== 'number' || typeof data.lon !== 'number') return;
+
+        var latlng = [data.lat, data.lon];
+        trail.push(latlng);
+        trailLine.setLatLngs(trail);
+
+        if (!marker) {
+          marker = L.marker(latlng).addTo(map).bindPopup('BBB');
+        } else {
+          marker.setLatLng(latlng);
+        }
+        map.setView(latlng);
+        fixMapSize();
+
+        infoboxEl.textContent = 'Lat: ' + data.lat.toFixed(6) +
+          '  Lon: ' + data.lon.toFixed(6);
+      };
+
+      socket.onclose = function () {
+        infoboxEl.textContent = 'WebSocket fechado — reconectando em 3s...';
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    window.addEventListener('unload', function () {
+      if (socket) socket.close();
+    });
+
+    connectWebSocket();
+  </script>
+</body>
+</html>

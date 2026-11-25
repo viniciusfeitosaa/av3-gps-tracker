@@ -1,0 +1,21 @@
+# Dependências e build
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Segredos — NUNCA publicar Write API Key
+thingspeak.config.json
+*.env
+.env*
+
+# Certificados privados
+certs/*.key
+certs/*.pem
+
+# Lixo local
+*.log
+.DS_Store
+Thumbs.db
+*.swp
+tmp/
+temp/
