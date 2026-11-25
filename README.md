@@ -7,7 +7,7 @@ Rastreador GPS (UART NMEA RMC) na BeagleBone Black.
 
 ## Mapa público (GitHub Pages)
 
-URL (após Pages ativo): ver Settings → Pages deste repositório  
+**URL:** https://viniciusfeitosaa.github.io/av3-gps-tracker/  
 Fonte: pasta [`docs/`](docs/) → `index.html` (frontend Leaflet que lê o canal ThingSpeak).
 
 A BBB **não** precisa estar no cabo USB para o professor ver o mapa. Só precisa estar enviando ao canal (WiFi/tether + `./run_remote.sh`).
